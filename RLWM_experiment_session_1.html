@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RLWM experiment 2</title>
+
+  <!-- Lets the browser understand shortcut paths like @utils and @tasks, it was an issue before -->
+  <script type="importmap">
+  {
+    "imports": {
+      "@utils": "../core/utils/index.js",
+      "@utils/": "../core/utils/",
+      "@tasks/": "../tasks/",
+      "@api/": "../api/",
+      "@core/": "../core/",
+      "@assets/": "../assets/"
+    }
+  }
+  </script>
+
+  <!-- jsPsych core files -->
+  <script src="/core/jspsych/jspsych.js"></script>
+  <script src="/core/jspsych/plugin-html-keyboard-response.js"></script>
+  <script src="/core/jspsych/plugin-html-button-response.js"></script>
+  <script src="/core/jspsych/plugin-instructions.js"></script>
+  <script src="/core/jspsych/plugin-preload.js"></script>
+  <script src="/core/jspsych/plugin-call-function.js"></script>
+  <script src="/core/jspsych/plugin-fullscreen.js"></script>
+  <script src="/core/jspsych/plugin-survey-multi-choice.js"></script>
+
+  <!-- Task plugin for the card-choosing trials -->
+  <script src="/tasks/card-choosing/plugin-card-choosing.js"></script>
+
+  <!-- Core utilities -->
+
+  <!-- Default jsPsych + styling -->
+  <link href="/core/jspsych/jspsych.css" rel="stylesheet" type="text/css" />
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    #display_element {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .instructions p {
+      width: 700px;
+      text-align: left;
+      margin: 1em 0;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- jsPsych initialization with display settings-->
+  <div id="display_element"></div>
+  <script type="module">
+  // Main experiment functionbuilders
+  import { createTaskTimeline, getTaskInfo } from '/api/index.js';
+  import { enterExperiment } from '/core/utils/index.js';
+
+  // We probs need some get parameters, e.g. for ppns
+  // Ask experimenter for participant number
+  window.participantID = prompt('Participant number?') || 'test';
+  // Optional simulation mode
+  window.simulating = window.participantID.includes('simulate') || false;
+
+  console.log('participantID:', window.participantID);
+  console.log('simulating:', window.simulating);
+  
+  
+  
+  //window.participantID = new URLSearchParams(window.location.search).get('participant_id') || '';
+  //window.simulating = window.participantID.includes("simulate") || false;
+  //console.log(window.simulating);
+
+  // Change these later if needed
+  const taskConfig = {
+    session: "wk0",   // Session label  CHANGE TO session: "wk0"
+    sequence: "wk0"   // Sequence/version used by the task CHANGE TO sequence: "wk0"
+  };
+
+  // Initialize jsPsych
+  window.jsPsych = initJsPsych({
+    display_element: 'display_element',
+  on_finish: function(data) {
+
+    // Convert all jsPsych data into CSV format
+    const csv = jsPsych.data.get().csv();
+
+    // Create a downloadable file
+    const blob = new Blob([csv], {
+      type: 'text/csv;charset=utf-8;'
+    });
+
+    // Create invisible download link
+    const link = document.createElement('a');
+
+    // Generate temporary local file URL
+    link.href = URL.createObjectURL(blob);
+
+    // Name of downloaded file to save data
+    const today = new Date().toISOString().slice(0, 10); // DATE the files 2026-05-13
+    link.download = `RLWM_S1_pp${window.participantID}_data_${today}.csv`;
+    
+
+    // Trigger download automatically
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Print data to browser console
+    console.log('Experiment data:', data.values());
+
+    // Final participant message
+    jsPsych.getDisplayElement().innerHTML =
+      '<p>Experiment complete. Thank you for participating!</p>';      
+
+  }
+  });
+
+  // Function to run the experiment
+  async function runExperiment() {
+    try {
+      console.log('Starting card choosing task...');
+
+      // Get task information
+      const taskInfo = getTaskInfo('WM');
+      console.log('Task info:', taskInfo);
+
+      // Create the main WM timeline
+      const learningTimeline = await createTaskTimeline('WM', taskConfig);
+      console.log('Learning timeline length:', learningTimeline.length);
+
+
+      const exitFullscreen = {
+        type: jsPsychFullscreen,
+        fullscreen_mode: false
+      };
+
+      // Create the complete timeline
+      const fullTimeline = [
+        enterExperiment,
+        ...learningTimeline,
+        exitFullscreen
+      ];
+
+      // Run the experiment
+      if (window.simulating) {
+        console.log('Simulating experiment run...');
+
+        let simulation_options = {
+          default: {
+            data: {
+              rt: 200
+            }
+          }
+        };
+
+        await jsPsych.simulate(fullTimeline, "visual", simulation_options);
+      } else {
+        console.log('Running experiment...');
+        await jsPsych.run(fullTimeline);
+      }
+
+    } catch (error) {
+      console.error('Error running experiment:', error);
+      jsPsych.getDisplayElement().innerHTML = `
+        <div style="text-align: center; padding: 50px;">
+          <h2>Error Loading Experiment</h2>
+          <p>There was an error loading the card choosing task:</p>
+          <p><strong>${error.message}</strong></p>
+          <p>Please check the console for more details.</p>
+        </div>
+      `;
+    }
+  }
+
+  // Start the experiment when the page loads
+  window.addEventListener('load', runExperiment);
+</script>
